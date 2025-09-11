@@ -1,20 +1,41 @@
 /* =============================================================
- * ui/ExercisesList.js — v0.1.0
- * Platzhalter-Liste für Übungen (Mathe/Deutsch je Klassenstufe).
+ * ui/ExercisesList.js — v0.1.1
+ * Auswahl + Start echter Übungen.
  * ============================================================= */
+import { Exercises } from '../data/exercises.js';
+
 export const ExercisesList = {
   render(user) {
+    const list = Exercises.list();
+    const items = list.map(x => `
+      <li class="panel">
+        <div class="spread">
+          <div>
+            <strong>${x.title}</strong>
+            <div class="badge">${x.subject} · Klasse ${x.grade}</div>
+          </div>
+          <div>
+            <button class="btn-start" data-id="${x.id}">Start</button>
+          </div>
+        </div>
+      </li>
+    `).join('');
     return `
       <section class="panel">
-        <h2>Übungen (Demo)</h2>
-        <p>Hier erscheinen später deine Aufgaben. Zum Start gibt es nur Platzhalter:</p>
-        <ul>
-          <li>Mathe — Einmaleins (Klasse 2)</li>
-          <li>Deutsch — Wortarten (Klasse 3)</li>
-          <li>Mathe — Schriftliches Addieren (Klasse 4)</li>
+        <h2>Übungen</h2>
+        <ul style="list-style:none;padding:0;margin:0;display:grid;gap:12px;">
+          ${items}
         </ul>
       </section>
     `;
   },
-  bind(rootEl) {}
+  bind(rootEl) {
+    rootEl.querySelectorAll('.btn-start').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        // Router-Navigation per Hash
+        window.location.hash = `#/exercise?id=${encodeURIComponent(id)}`;
+      });
+    });
+  }
 };
