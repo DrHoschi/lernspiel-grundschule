@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lernspiel Grundschule — v0.1.0</title>
+
+  <!--
+    =============================================================
+    index.html — Version v0.1.0
+    Zweck:
+    - Einstiegspunkt für das Lernspiel (Standalone, ohne Build-Tool)
+    - Lädt JavaScript-Module und initialisiert die App
+    Struktur (Abschnitts-Nr.):
+    (1) Meta & Titel
+    (2) Basis-Styles (src/styles.css)
+    (3) Body-Container & Root
+    (4) JS-Module (boot → app → router + ui-Komponenten)
+    =============================================================
+  -->
+
+  <!-- (2) Basis-Styles -->
+  <link rel="stylesheet" href="./src/styles.css" />
+</head>
+<body>
+  <!-- (3) App-Container -->
+  <noscript>Bitte JavaScript aktivieren, um das Lernspiel nutzen zu können.</noscript>
+
+  <div id="app-root">
+    <!-- Navbar wird hier dynamisch gerendert -->
+    <header id="app-navbar"></header>
+    <!-- Hauptinhalt -->
+    <main id="app-main" role="main" aria-live="polite"></main>
+    <!-- Fußbereich -->
+    <footer id="app-footer">
+      <small>© 2025 Lernspiel (v0.1.0)</small>
+    </footer>
+  </div>
+
+  <!-- (4) JS-Module -->
+  <script type="module" src="./src/boot.js"></script>
+</body>
+</html>
