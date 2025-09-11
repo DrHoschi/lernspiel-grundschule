@@ -102,14 +102,28 @@ export const App = {
       });
     });
 
-    Router.define('/exercises', () => {
+        Router.define('/exercise', () => {
       const u = Auth.currentUser();
       const main = document.getElementById('app-main');
-      if (!u || u.role !== 'child') {
-        return Router.go('/login');
-      }
-      main.innerHTML = ExercisesList.render(u);
-      ExercisesList.bind(main);
+      if (!u || u.role !== 'child') return Router.go('/login');
+
+      // id aus Hash-Query lesen (#/exercise?id=...)
+      const params = new URLSearchParams((window.location.hash.split('?')[1] || ''));
+      const id = params.get('id') || 'm-multiplication-2to10';
+
+      main.innerHTML = ExercisePlay.render({ user: u, exerciseId: id });
+      ExercisePlay.bind(main, {
+        onFinish: ({ ex, correct, wrong, stats }) => {
+          main.innerHTML = `
+            <section class="panel">
+              <h2>Fertig: ${ex.title}</h2>
+              <p>✅ Richtig: <strong>${correct}</strong></p>
+              <p>❌ Falsch: <strong>${wrong}</strong></p>
+              <p><a href="#/exercises">Weitere Übungen</a></p>
+            </section>
+          `;
+        }
+      });
     });
 
     Router.fallback(() => {
