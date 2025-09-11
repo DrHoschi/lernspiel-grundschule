@@ -11,6 +11,8 @@ import { DashboardParent } from './ui/DashboardParent.js';
 import { DashboardChild } from './ui/DashboardChild.js';
 import { ExercisesList } from './ui/ExercisesList.js';
 import { NotFound } from './ui/NotFound.js';
+import { ExercisePlay } from './ui/ExercisePlay.js';
+import { Exercises } from './data/exercises.js';
 
 const AppState = {
   version: 'v0.1.0',
