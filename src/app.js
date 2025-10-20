@@ -51,19 +51,20 @@ export const App = {
       return Router.go('/child');
     });
 
-    Router.define('/login', () => {
-      const main = document.getElementById('app-main');
-      main.innerHTML = `<div class="layout-wrapper">${LoginForm.render()}</div>`;
-      LoginForm.bind(main, {
-        onSubmit: (payload) => {
-          const user = Auth.login(payload);
-          AppState.user = user;
-          this.refreshNavbar();
-          if (user.role === 'parent') Router.go('/parent');
-          else Router.go('/child');
-        }
-      });
-    });
+
+Router.define('/login', () => {
+  const main = document.getElementById('app-main');
+  main.innerHTML = `<div class="layout-wrapper">${LoginForm.render()}</div>`;
+  LoginForm.bind(main, {
+    onSubmit: (user) => {
+      // user kommt bereits aus Auth (parent/child)
+      AppState.user = user;
+      this.refreshNavbar();
+      if (user.role === 'parent') Router.go('/parent');
+      else Router.go('/child');
+    }
+  });
+});
 
     // ⬇️ Hier ist die relevante Änderung:
     Router.define('/parent', () => {
