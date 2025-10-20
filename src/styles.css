@@ -226,3 +226,19 @@ ul.clean{
 }
 .panel::-webkit-scrollbar{ height: 8px; }
 .panel::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.25); border-radius: 8px; }
+
+/* ============================================================================
+   [6] Layout-Korrektur für alle Seiteninhalte
+   - verhindert doppeltes Padding
+   - erzwingt einheitliche Breite nach Login (Übungen, Dashboards)
+============================================================================ */
+.layout-wrapper {
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--gap);
+  display: block;
+}
+.layout-wrapper > .panel {
+  margin-bottom: var(--gap);
+}
