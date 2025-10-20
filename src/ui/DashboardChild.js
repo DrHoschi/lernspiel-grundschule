@@ -1,36 +1,69 @@
 /* ============================================================================
  * Datei   : src/ui/DashboardChild.js
- * Version : v0.6.1 (2025-10-20)
- * Zweck   : Kinder-Dashboard mit Sticker-Sammlung (lokal)
- * Store   : lernspiel.stickers = { [childName]: [{ts, exerciseId, tier, tierIcon, progress}] }
+ * Version : v0.6.2 (2025-10-20)
+ * Zweck   : Kinder-Dashboard mit Sticker-Sammlung, Zielen, Training
  * ========================================================================== */
 import { Storage } from '../lib/storage.js';
+import { Goals } from '../data/goals.js';
+import { Achievements } from '../data/achievements.js';
 
 const STICKERS_KEY = 'lernspiel.stickers';
-
-function loadStickers(childName){
-  const db = Storage.get(STICKERS_KEY, {});
-  return (db[childName] || []).slice().sort((a,b)=> (b.ts||'').localeCompare(a.ts||''));
-}
+function loadStickers(child){ const db = Storage.get(STICKERS_KEY, {}); return (db[child]||[]).slice().sort((a,b)=> (b.ts||'').localeCompare(a.ts||'')); }
 
 export const DashboardChild = {
   render(user){
     const stickers = loadStickers(user.name);
-    const countMedals = stickers.filter(s=> s.tier==='gold' || s.tier==='silver' || s.tier==='bronze').length;
-    const countRocket = stickers.filter(s=> s.progress).length;
+    const medals = stickers.filter(s=> ['gold','silver','bronze'].includes(s.tier)).length;
+    const rockets= stickers.filter(s=> s.progress).length;
+
+    const g = Goals.getToday(user.name);
+    const ach = Achievements.get(user.name);
+
+    const progRounds  = Math.min(100, Math.round(100 * g.rounds / g.targetRounds));
+    const progCorrect = Math.min(100, Math.round(100 * g.correct / g.targetCorrect));
 
     return `
       <section class="panel">
         <div class="spread">
           <h2>Hallo, ${user.name}!</h2>
           <div class="flex">
-            <span class="badge">🥇/🥈/🥉: ${countMedals}</span>
-            <span class="badge">🚀: ${countRocket}</span>
+            <span class="badge">🥇/🥈/🥉: ${medals}</span>
+            <span class="badge">🚀: ${rockets}</span>
+          </div>
+        </div>
+
+        <div class="grid two" style="margin-top:8px;">
+          <div class="panel">
+            <h3>Tagesziele</h3>
+            <p>Runden: ${g.rounds} / ${g.targetRounds}</p>
+            <div style="height:8px;background:#23354f;border-radius:6px;overflow:hidden;"><div style="width:${progRounds}%;height:8px;background:#4aa3ff;"></div></div>
+            <p style="margin-top:6px;">Richtige Antworten: ${g.correct} / ${g.targetCorrect}</p>
+            <div style="height:8px;background:#23354f;border-radius:6px;overflow:hidden;"><div style="width:${progCorrect}%;height:8px;background:#3ecf8e;"></div></div>
+            ${g.achieved ? `<p class="badge" style="margin-top:6px;">✅ Tagesziel geschafft!</p>` : ''}
+            <div class="form-actions" style="margin-top:8px;">
+              <button id="btn-goal-set" class="ghost">Ziele anpassen</button>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3>Achievements</h3>
+            <p class="badge">Gold: ${ach.counts.gold}</p>
+            <p class="badge">Silber: ${ach.counts.silver}</p>
+            <p class="badge">Bronze: ${ach.counts.bronze}</p>
+            <p class="badge">🚀: ${ach.counts.rocket}</p>
           </div>
         </div>
 
         <div class="panel" style="margin-top:8px;">
-          <h3>Deine Sticker</h3>
+          <div class="spread">
+            <h3>Deine Sticker</h3>
+            <div class="flex">
+              <button id="btn-train" class="">Trainiere schwierigste Aufgaben</button>
+              <button id="btn-start" class="ghost">Übungen starten</button>
+              <button id="btn-clear-stickers" class="ghost" title="Nur deine Sticker löschen">Sticker löschen</button>
+            </div>
+          </div>
+
           ${
             stickers.length
             ? `<div class="grid three" id="sticker-grid" style="margin-top:8px;">
@@ -38,7 +71,7 @@ export const DashboardChild = {
                   <div class="panel" style="text-align:center;">
                     <div style="font-size:28px; line-height:1.2;">${s.tierIcon}</div>
                     <div class="badge" style="margin-top:6px;">
-                      ${s.progress ? 'Fortschritt' : (s.tier.toUpperCase())}
+                      ${s.label ? s.label : (s.progress ? 'Fortschritt' : s.tier.toUpperCase())}
                     </div>
                     <div style="font-size:12px; color:var(--muted); margin-top:4px;">
                       ${new Date(s.ts).toLocaleString()}
@@ -49,40 +82,41 @@ export const DashboardChild = {
             : `<p>Noch keine Sticker – starte eine Übung!</p>`
           }
         </div>
-
-        <div class="form-actions" style="margin-top:12px;">
-          <button id="btn-start">Übungen starten</button>
-          <button id="btn-clear-stickers" class="ghost" title="Nur deine Sticker löschen">Sticker löschen</button>
-        </div>
       </section>
     `;
   },
 
   bind(rootEl, { onStartExercises }){
-    const startBtn = rootEl.querySelector('#btn-start');
-    startBtn?.addEventListener('click', ()=> onStartExercises && onStartExercises());
+    const user = (window.__APP_USER__) || null; // optional, nicht kritisch
+    rootEl.querySelector('#btn-start')?.addEventListener('click', ()=> onStartExercises && onStartExercises());
+    rootEl.querySelector('#btn-train')?.addEventListener('click', ()=>{
+      // Standard-Übung für Training (Multiplikation); bei Bedarf später auswählbar machen
+      location.hash = '#/train-hard?ex=m-multiplication-2to10';
+    });
 
-    // Sticker nur für dieses Kind löschen
     rootEl.querySelector('#btn-clear-stickers')?.addEventListener('click', ()=>{
       if (!confirm('Möchtest du deine Sticker wirklich löschen?')) return;
       import('../lib/storage.js').then(({Storage})=>{
-        const db = Storage.get('lernspiel.stickers', {});
-        const u = rootEl.closest('#app-main')?.dataset?.userName; // not used; safer to just ask parent
-        // Wir brauchen den Namen aus Navbar/AppState – einfacher:
-        // Hole aktuellen User aus Session:
         import('../auth/auth.js').then(({Auth})=>{
-          const user = Auth.currentUser();
-          if (!user) return;
-          const all = Storage.get('lernspiel.stickers', {});
-          all[user.name] = [];
-          Storage.set('lernspiel.stickers', all);
-          // UI neu zeichnen:
+          const u = Auth.currentUser(); if (!u) return;
+          const all = Storage.get('lernspiel.stickers', {}); all[u.name] = []; Storage.set('lernspiel.stickers', all);
+          // Re-render
           const main = document.getElementById('app-main');
-          if (main) {
-            // Re-render
-            main.querySelector('.layout-wrapper').innerHTML = this.render(user);
-            this.bind(main, { onStartExercises });
-          }
+          if (main){ main.querySelector('.layout-wrapper').innerHTML = this.render(u); this.bind(main, { onStartExercises }); }
+        });
+      });
+    });
+
+    rootEl.querySelector('#btn-goal-set')?.addEventListener('click', ()=>{
+      import('../auth/auth.js').then(({Auth})=>{
+        const u = Auth.currentUser(); if (!u) return;
+        const r = prompt('Ziel: Runden pro Tag (z. B. 2):','2'); if (r==null) return;
+        const c = prompt('Ziel: richtige Antworten pro Tag (z. B. 50):','50'); if (c==null) return;
+        import('../data/goals.js').then(({Goals})=>{
+          Goals.setTargets(u.name, { targetRounds:Number(r), targetCorrect:Number(c) });
+          // Re-render:
+          const main = document.getElementById('app-main');
+          if (main){ main.querySelector('.layout-wrapper').innerHTML = this.render(u); this.bind(main, { onStartExercises }); }
         });
       });
     });
