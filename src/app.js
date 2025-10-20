@@ -15,6 +15,7 @@ import { NotFound } from './ui/NotFound.js';
 import { ExercisePlay } from './ui/ExercisePlay.js';
 import { Exercises } from './data/exercises.js';
 import { StatsDetail } from './ui/StatsDetail.js';
+import { TrainHard } from './ui/TrainHard.js';
 
 const AppState = { version: 'v0.2.2', user: null };
 
