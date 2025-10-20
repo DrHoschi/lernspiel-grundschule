@@ -1,14 +1,41 @@
 /* ============================================================================
  * Datei   : src/ui/ExercisePlay.js
- * Version : v0.6.0 (2025-10-20)
- * Zweck   : Einmaleins-Übung mit Zeitmessung pro Item + Rundendauer.
- * Speichert pro Aufgabe (a×b):
- *   - correct (true/false)
- *   - timeMs (Millisekunden für diese Aufgabe)
- *   - a, b, result
- * Übergibt an Exercises.saveAttempt(...) die vollständige Itemliste.
+ * Version : v0.6.1 (2025-10-20)
+ * Zweck   : Einmaleins mit Zeit je Item + robuster Finish-Schutz + Sticker
+ * Neu     : _finished-Flag, Controls deaktivieren, Sticker in localStorage
+ * Store   : lernspiel.stickers = { [childName]: [{ts, exerciseId, tier, tierIcon, progress:boolean}] }
  * ========================================================================== */
 import { Exercises } from '../data/exercises.js';
+import { Storage } from '../lib/storage.js';
+
+const STICKERS_KEY = 'lernspiel.stickers';
+
+function giveStickers(childName, exerciseId, reward){
+  // Speichert Medaille (tierIcon) und optional Fortschritt-Sticker
+  const db = Storage.get(STICKERS_KEY, {});
+  if (!db[childName]) db[childName] = [];
+  const ts = new Date().toISOString();
+
+  // Medaille nur speichern, wenn es eine echte Stufe ist
+  if (reward.tier !== 'none'){
+    db[childName].push({
+      ts, exerciseId,
+      tier: reward.tier,
+      tierIcon: reward.tierIcon,
+      progress: false
+    });
+  }
+  // Fortschritt (Rakete) separat
+  if (reward.progressSticker){
+    db[childName].push({
+      ts, exerciseId,
+      tier: 'progress',
+      tierIcon: '🚀',
+      progress: true
+    });
+  }
+  Storage.set(STICKERS_KEY, db);
+}
 
 export const ExercisePlay = {
   _state: null,
@@ -24,8 +51,10 @@ export const ExercisePlay = {
       min: ex.config.min, max: ex.config.max,
       asked: 0, correct: 0, wrong: 0,
       startTs: Date.now(), timeLimit: ex.config.timeLimitSec,
-      items: [],           // ← sammelt {a,b,result,correct,timeMs}
-      qStartTs: null,      // ← Startzeitpunkt der aktuellen Aufgabe
+      items: [],           // sammelt {a,b,result,correct,timeMs}
+      qStartTs: null,      // Startzeitpunkt der aktuellen Aufgabe
+      _timer: null,
+      _finished: false     // ← Finish-Schutz
     };
     const q = this._nextQuestion(); // setzt auch qStartTs
     return `
@@ -92,9 +121,18 @@ export const ExercisePlay = {
       this._record(false); // falsche Antwort ohne Eingabe
     });
 
-    // Finish: lokal speichern inkl. Zeiten → Reward/Stats kommen von Exercises.saveAttempt
+    // === Robustes Finish ===
     const finish = () => {
+      if (this._state._finished) return;            // mehrfaches Finish verhindern
+      this._state._finished = true;
+
       if (this._state?._timer) cancelAnimationFrame(this._state._timer);
+
+      // Controls deaktivieren, damit nichts mehr feuert
+      answerEl && (answerEl.disabled = true);
+      submitBtn && (submitBtn.disabled = true);
+      skipBtn && (skipBtn.disabled = true);
+
       const { user, ex, correct, wrong, startTs, items } = this._state;
 
       const stats = Exercises.saveAttempt({
@@ -107,10 +145,14 @@ export const ExercisePlay = {
         items
       });
 
+      // Reward bestimmen
       const tier = stats.ratio >= 90 ? 'gold' : (stats.ratio >= 75 ? 'silver' : (stats.ratio >= 60 ? 'bronze' : 'none'));
       const tierIcon = tier === 'gold' ? '🥇' : tier === 'silver' ? '🥈' : tier === 'bronze' ? '🥉' : '🎯';
       const progressSticker = stats.delta >= 10 ? '🚀 Fortschritt' : '';
       const reward = { tier, tierIcon, progressSticker, ratio: stats.ratio, delta: stats.delta, best: stats.bestRatio, streak: stats.streak, last5Avg: stats.last5Avg };
+
+      // Sticker speichern
+      giveStickers(user.name || 'Kind', ex.id, reward);
 
       onFinish && onFinish({ ex, correct, wrong, stats, reward });
     };
@@ -134,6 +176,7 @@ export const ExercisePlay = {
   },
 
   _record(ok){
+    if (this._state._finished) return; // Sicherheit
     const now = Date.now();
     const timeMs = Math.max(0, now - (this._state.qStartTs || now));
     const { a, b, result } = this._state.current;
@@ -151,6 +194,7 @@ export const ExercisePlay = {
     if (sC) sC.textContent = String(this._state.correct);
     if (sW) sW.textContent = String(this._state.wrong);
 
+    // Ende?
     if (this._state.asked >= this._state.total){
       this._finish && this._finish();
       return;
