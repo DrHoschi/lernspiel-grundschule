@@ -128,7 +128,67 @@ Router.define('/stats', () => {
   main.innerHTML = `<div class="layout-wrapper">${StatsDetail.render()}</div>`;
   StatsDetail.bind(main);
 });
-    
+    // Kind: Fortschrittsbuch
+Router.define('/kidbook', () => {
+  const u = Auth.currentUser();
+  const main = document.getElementById('app-main');
+  if (!u || u.role !== 'child') return Router.go('/login');
+  main.innerHTML = `<div class="layout-wrapper">${ProgressBook.render({ user: u })}</div>`;
+  ProgressBook.bind(main);
+});
+
+// Kind: Meilenstein-Poster
+Router.define('/poster', () => {
+  const u = Auth.currentUser();
+  const main = document.getElementById('app-main');
+  if (!u || u.role !== 'child') return Router.go('/login');
+  main.innerHTML = `<div class="layout-wrapper">${MilestonePoster.render({ user: u })}</div>`;
+  MilestonePoster.bind(main);
+});
+
+// Kind: Speedrun / Supertraining (60s)
+Router.define('/superrun', ({ query }) => {
+  const u = Auth.currentUser();
+  const main = document.getElementById('app-main');
+  if (!u || u.role !== 'child') return Router.go('/login');
+  const ex = query.get('ex') || 'm-multiplication-2to10';
+  main.innerHTML = `<div class="layout-wrapper">${SuperRun.render({ user: u, exId: ex })}</div>`;
+  SuperRun.bind(main, {
+    onFinish: ({ ex, correct, total, best, isNewBest }) => {
+      main.innerHTML = `
+        <div class="layout-wrapper">
+          <section class="panel">
+            <h2>Speedrun fertig</h2>
+            <p>Richtige in 60s: <strong>${correct}</strong> / ${total}</p>
+            <p>Dein Rekord: <strong>${best}</strong>${isNewBest ? ' 🎉 (neu!)' : ''}</p>
+            <p><a href="#/child">Zurück zum Dashboard</a></p>
+          </section>
+        </div>`;
+    }
+  });
+});
+
+// (Schon vorhanden, nur zur Sicherheit)
+Router.define('/train-hard', ({ query }) => {
+  const u = Auth.currentUser();
+  const main = document.getElementById('app-main');
+  if (!u || u.role !== 'child') return Router.go('/login');
+  const ex = query.get('ex') || 'm-multiplication-2to10';
+  main.innerHTML = `<div class="layout-wrapper">${TrainHard.render({ user: u, exId: ex })}</div>`;
+  TrainHard.bind(main, {
+    onFinish: ({ ex, correct, wrong, stats, reward }) => {
+      main.innerHTML = `
+        <div class="layout-wrapper">
+          <section class="panel">
+            <h2>Fertig: ${ex.title}</h2>
+            <p>✅ <strong>${correct}</strong> · ❌ <strong>${wrong}</strong></p>
+            <p>Quote: <strong>${stats.ratio}%</strong></p>
+            <p><a href="#/child">Zurück zum Dashboard</a></p>
+          </section>
+        </div>`;
+    }
+  });
+});
     // Übung spielen – mit Belohnungs-Screen (stats + reward)
 Router.define('/exercise', ({ query }) => {
   const u = Auth.currentUser();
