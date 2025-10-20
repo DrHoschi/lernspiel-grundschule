@@ -94,27 +94,58 @@ Router.define('/login', () => {
       ExercisesList.bind(main);
     });
 
-    Router.define('/exercise', ({ query }) => {
-      const u = Auth.currentUser();
-      const main = document.getElementById('app-main');
-      if (!u || u.role !== 'child') return Router.go('/login');
-      AppState.user = u;
-      const id = query.get('id') || 'm-multiplication-2to10';
-      main.innerHTML = `<div class="layout-wrapper">${ExercisePlay.render({ user: u, exerciseId: id })}</div>`;
-      ExercisePlay.bind(main, {
-        onFinish: ({ ex, correct, wrong }) => {
-          main.innerHTML = `
-            <div class="layout-wrapper">
-              <section class="panel">
-                <h2>Fertig: ${ex.title}</h2>
-                <p>✅ Richtig: <strong>${correct}</strong></p>
-                <p>❌ Falsch: <strong>${wrong}</strong></p>
-                <p><a href="#/exercises">Weitere Übungen</a></p>
-              </section>
-            </div>`;
-        }
-      });
-    });
+    // Übung spielen – mit Belohnungs-Screen (stats + reward)
+Router.define('/exercise', ({ query }) => {
+  const u = Auth.currentUser();
+  const main = document.getElementById('app-main');
+  if (!u || u.role !== 'child') return Router.go('/login');
+  AppState.user = u;
+
+  const id = query.get('id') || 'm-multiplication-2to10';
+  main.innerHTML = `<div class="layout-wrapper">${ExercisePlay.render({ user: u, exerciseId: id })}</div>`;
+
+  ExercisePlay.bind(main, {
+    onFinish: ({ ex, correct, wrong, stats, reward }) => {
+      // Hilfsfunktionen für die Anzeige
+      const deltaHtml = (stats.delta === 0)
+        ? ''
+        : (stats.delta > 0
+            ? ` (<span style="color:var(--good);font-weight:700">+${stats.delta}%</span> vs. letztes Mal)`
+            : ` (<span style="color:var(--bad);font-weight:700">-${Math.abs(stats.delta)}%</span> vs. letztes Mal)`);
+
+      const tierLabel = reward.tier === 'gold' ? 'GOLD'
+                     : reward.tier === 'silver' ? 'SILBER'
+                     : reward.tier === 'bronze' ? 'BRONZE'
+                     : 'Weitermachen!';
+
+      main.innerHTML = `
+        <div class="layout-wrapper">
+          <section class="panel">
+            <h2>Fertig: ${ex.title}</h2>
+
+            <p>✅ Richtig: <strong>${correct}</strong> · ❌ Falsch: <strong>${wrong}</strong></p>
+
+            <div class="grid two">
+              <div class="panel">
+                <h3>Dein Ergebnis</h3>
+                <p>Quote: <strong>${stats.ratio}%</strong>${deltaHtml}</p>
+                <p>Ø letzte 5: <strong>${stats.last5Avg}%</strong></p>
+                <p>Bestwert: <strong>${stats.bestRatio}%</strong> · Streak: <strong>${stats.streak}x</strong></p>
+              </div>
+
+              <div class="panel">
+                <h3>Belohnung</h3>
+                <p style="font-size:24px; margin:0;">${reward.tierIcon} ${tierLabel}</p>
+                ${reward.progressSticker ? `<p class="badge" style="margin-top:8px;">${reward.progressSticker}</p>` : ''}
+              </div>
+            </div>
+
+            <p style="margin-top:12px;"><a href="#/exercises">Weitere Übungen</a></p>
+          </section>
+        </div>`;
+    }
+  });
+});
 
     Router.fallback(() => {
       const main = document.getElementById('app-main');
