@@ -32,6 +32,9 @@ export const DashboardParent = {
     const html = `
       <section class="panel">
         <h2>Elternbereich</h2>
+<p>
+  <a href="#/stats" class="badge" style="display:inline-block; margin-top:6px;">📊 Details ansehen</a>
+</p>
         <div class="grid two">
           <div class="panel">
             <h3>Gesamtleistung (alle Kinder)</h3>
