@@ -96,6 +96,27 @@ Router.define('/login', () => {
       ExercisesList.bind(main);
     });
 
+    Router.define('/train-hard', ({ query }) => {
+  const u = Auth.currentUser();
+  const main = document.getElementById('app-main');
+  if (!u || u.role !== 'child') return Router.go('/login');
+  const ex = query.get('ex') || 'm-multiplication-2to10';
+  main.innerHTML = `<div class="layout-wrapper">${TrainHard.render({ user: u, exId: ex })}</div>`;
+  TrainHard.bind(main, {
+    onFinish: ({ ex, correct, wrong, stats, reward }) => {
+      main.innerHTML = `
+        <div class="layout-wrapper">
+          <section class="panel">
+            <h2>Fertig: ${ex.title}</h2>
+            <p>✅ <strong>${correct}</strong> · ❌ <strong>${wrong}</strong></p>
+            <p>Quote: <strong>${stats.ratio}%</strong></p>
+            <p><a href="#/child">Zurück zum Dashboard</a></p>
+          </section>
+        </div>`;
+    }
+  });
+});
+    
 Router.define('/stats', () => {
   const u = Auth.currentUser();
   const main = document.getElementById('app-main');
