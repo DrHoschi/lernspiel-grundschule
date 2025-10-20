@@ -1,11 +1,12 @@
 /* ============================================================================
- * Datei : src/config.js
- * Version: v0.3.0
- * Zweck  : Zentrale App-Konfiguration für API-Anbindung.
- * Hinweis: API_BASE auf deinen Server anpassen (z. B. https://api.deinspiel.de)
- *          Wenn leer/aus, läuft alles rein lokal wie bisher.
+ * Datei  : src/config.js
+ * Version: v0.4.0 (2025-10-20)
+ * Zweck  : Zentrale Konfiguration für API/Timeouts.
+ * Hinweise:
+ *   - Wenn API_BASE leer ist, laufen alle Auth/Stats-Aufrufe lokal (Mock).
+ *   - Sobald API_BASE gesetzt ist, wird zuerst die API genutzt (mit Fallback).
  * ========================================================================== */
 export const CONFIG = {
-  API_BASE: "",        // z.B. "https://lernspiel-api.example.com" (ohne Slash am Ende)
-  API_TIMEOUT_MS: 8000 // Timeout für Requests
+  API_BASE: "",          // z. B. "https://api.lernspiel.example.com"
+  API_TIMEOUT_MS: 8000
 };
