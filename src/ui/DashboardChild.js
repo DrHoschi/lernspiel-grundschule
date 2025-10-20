@@ -59,8 +59,13 @@ export const DashboardChild = {
             <h3>Deine Sticker</h3>
             <div class="flex">
               <button id="btn-train" class="">Trainiere schwierigste Aufgaben</button>
-              <button id="btn-start" class="ghost">Übungen starten</button>
-              <button id="btn-clear-stickers" class="ghost" title="Nur deine Sticker löschen">Sticker löschen</button>
+                  <a class="badge" href="#/kidbook">📘 Fortschrittsbuch</a>
+    <a class="badge" href="#/poster">🏆 Poster</a>
+    <a class="badge" href="#/train-hard?ex=m-multiplication-2to10">🎯 Schwerste Aufgaben</a>
+    <a class="badge" href="#/superrun?ex=m-multiplication-2to10">⏱️ Speedrun</a>
+    <button id="btn-start" class="ghost">Übungen starten</button>
+    <button id="btn-clear-stickers" class="ghost">Sticker löschen</button>
+
             </div>
           </div>
 
