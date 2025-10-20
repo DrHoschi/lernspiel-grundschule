@@ -155,6 +155,15 @@ export const ExercisePlay = {
       // Sticker speichern
       giveStickers(user.name || 'Kind', ex.id, reward);
 
+
+      
+
+      // ➕ Achievements zählen & Bonus-Sticker ggf. vergeben
+      Achievements.onRound(user.name || 'Kind', reward, ex.id);
+
+      // ➕ Tagesziele fortschreiben
+      Goals.onRound(user.name || 'Kind', correct);
+      
       onFinish && onFinish({ ex, correct, wrong, stats, reward });
     };
     this._finish = finish;
