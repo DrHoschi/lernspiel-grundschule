@@ -1,7 +1,7 @@
 /* =============================================================
  * Datei : src/ui/DashboardParent.js
- * Version: v0.6.1
- * Neu    : CSV-Export (Runden & Problem-Aufgaben)
+ * Version: v0.6.2-sec
+ * Neu    : Anzeige von Durchschnittszeiten in Sekunden (statt ms)
  * ============================================================= */
 import { Exercises } from '../data/exercises.js';
 
@@ -16,6 +16,7 @@ function toCSV(rows){
 function exportRoundsCSV(){
   const raw = Exercises.getRaw();
   const rows = [
+    // Hinweis: CSV kann auf Wunsch ebenfalls auf Sekunden umgestellt werden.
     ['Kind','Übung','Datum','Quote%','Richtig','Falsch','Dauer_s','Ø_ms','Median_ms']
   ];
   Object.entries(raw).forEach(([child, exs])=>{
@@ -110,18 +111,21 @@ export const DashboardParent = {
                     </div>
                     <div style="margin-top:8px;">
                       <ul>
-                        ${c.byEx.map(e=>`
-                          <li class="spread" style="margin-bottom:6px;">
-                            <div>
-                              <strong>${e.name}</strong>
-                              <div class="badge">Letzte: ${e.last}%</div>
-                              <div class="badge">Ø5: ${e.last5Avg}%</div>
-                              <div class="badge">Best: ${e.best}%</div>
-                              <div class="badge">Ø Zeit(5): ${e.durAvg5||0}ms</div>
-                            </div>
-                            <div>${badgeDelta(e.delta)}</div>
-                          </li>
-                        `).join('')}
+                        ${c.byEx.map(e=>{
+                          const dur5s = ((e.durAvg5||0)/1000).toFixed(1);
+                          return `
+                            <li class="spread" style="margin-bottom:6px;">
+                              <div>
+                                <strong>${e.name}</strong>
+                                <div class="badge">Letzte: ${e.last}%</div>
+                                <div class="badge">Ø5: ${e.last5Avg}%</div>
+                                <div class="badge">Best: ${e.best}%</div>
+                                <div class="badge">Ø Zeit(5): ${dur5s} s</div>
+                              </div>
+                              <div>${badgeDelta(e.delta)}</div>
+                            </li>
+                          `;
+                        }).join('')}
                       </ul>
                     </div>
                   </li>
