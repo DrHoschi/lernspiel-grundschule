@@ -7,7 +7,8 @@
  * ========================================================================== */
 import { Exercises } from '../data/exercises.js';
 import { Storage } from '../lib/storage.js';
-
+import { Achievements } from '../data/achievements.js';
+import { Goals } from '../data/goals.js';
 const STICKERS_KEY = 'lernspiel.stickers';
 
 function giveStickers(childName, exerciseId, reward){
