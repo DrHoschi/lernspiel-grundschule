@@ -1,6 +1,8 @@
 /* =============================================================
- * ui/ExercisePlay.js — v0.1.0
+ * ui/ExercisePlay.js — v0.3.0
  * Einmaleins-Trainer (2–10) mit Timer, Punkten, Fehlern.
+ * Neu: Attempt wird lokal gespeichert UND (falls API_BASE gesetzt)
+ *      zusätzlich an das Backend gesendet (Fallback bei Fehler).
  * ============================================================= */
 import { Exercises } from '../data/exercises.js';
 import { Utils } from '../lib/utils.js';
@@ -102,15 +104,36 @@ export const ExercisePlay = {
       this._mark(false);
     });
 
-    const finish = () => {
+    // === NEU: finish sendet zusätzlich an API (mit Fallback) ===
+    const finish = async () => {
       if (this._state?._timer) cancelAnimationFrame(this._state._timer);
-      const { user, ex, correct, wrong } = this._state;
+      const { user, ex, correct, wrong, startTs } = this._state;
+
+      // 1) Lokal speichern (wie bisher)
       const stats = Exercises.saveAttempt({
         userName: user.name || 'Kind',
         exerciseId: ex.id,
         correctCount: correct,
         wrongCount: wrong
       });
+
+      // 2) Optional: Server-Sync versuchen
+      try {
+        const durationSec = Math.max(0, Math.floor((Date.now() - startTs) / 1000));
+        const payload = {
+          childName: user.name || 'Kind',
+          exerciseId: ex.id,
+          correct,
+          wrong,
+          durationSec,
+          playedAtISO: new Date().toISOString()
+        };
+        const { API } = await import('../lib/api.js');
+        await API.postAttempt(payload, { token: null });
+      } catch (e) {
+        console.warn('[attempt] Server-Sync fehlgeschlagen (lokal gespeichert):', e?.message || e);
+      }
+
       onFinish && onFinish({ ex, correct, wrong, stats });
     };
     this._finish = finish;
