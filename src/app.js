@@ -1,23 +1,8 @@
 /* =============================================================
  * Datei : src/app.js
- * Version: v0.2.1 (2025-10-20)
- * Zweck  : Zentrale App-Initialisierung inkl. Routing.
- *          Ab dieser Version werden ALLE Screens in einen
- *          <div class="layout-wrapper"> … </div> gerendert,
- *          damit die Breite/Abstände auf allen Displays
- *          (Portrait & Landscape) garantiert passen.
- *
- * Struktur:
- *   [A] Imports & State
- *   [B] App.init / Navbar
- *   [C] Routing (mit Wrapper)
- *   [D] Helper
- *
- * Hinweis:
- *   Die CSS-Klasse .layout-wrapper ist in src/styles.css definiert.
- *   Diese Datei sorgt NUR dafür, dass jede Route den Wrapper nutzt.
+ * Version: v0.2.2 (2025-10-20)
+ * Änderung: /parent ruft DashboardParent.bind(main, u)
  * ============================================================= */
-
 import { Router } from './router.js';
 import { Navbar } from './ui/Navbar.js';
 import { Storage } from './lib/storage.js';
@@ -30,10 +15,8 @@ import { NotFound } from './ui/NotFound.js';
 import { ExercisePlay } from './ui/ExercisePlay.js';
 import { Exercises } from './data/exercises.js';
 
-/* [A] Globaler App-State -------------------------------------- */
-const AppState = { version: 'v0.2.1', user: null };
+const AppState = { version: 'v0.2.2', user: null };
 
-/* [B] App-Objekt ---------------------------------------------- */
 export const App = {
   init(opts = {}) {
     AppState.version = opts.version || AppState.version;
@@ -59,9 +42,7 @@ export const App = {
 
   refreshNavbar() { this.mountNavbar(); },
 
-  /* [C] Routing (ALLE Routen rendern in .layout-wrapper) ------- */
   configureRoutes() {
-    // Startroute → redirect je nach Rolle
     Router.define('/', () => {
       const u = Auth.currentUser();
       if (!u) return Router.go('/login');
@@ -70,7 +51,6 @@ export const App = {
       return Router.go('/child');
     });
 
-    // Login
     Router.define('/login', () => {
       const main = document.getElementById('app-main');
       main.innerHTML = `<div class="layout-wrapper">${LoginForm.render()}</div>`;
@@ -85,17 +65,16 @@ export const App = {
       });
     });
 
-    // Eltern-Dashboard
+    // ⬇️ Hier ist die relevante Änderung:
     Router.define('/parent', () => {
       const u = Auth.currentUser();
       const main = document.getElementById('app-main');
       if (!u || u.role !== 'parent') return Router.go('/login');
       AppState.user = u;
       main.innerHTML = `<div class="layout-wrapper">${DashboardParent.render(u)}</div>`;
-      DashboardParent.bind(main);
+      DashboardParent.bind(main, u); // vorher: DashboardParent.bind(main)
     });
 
-    // Kinder-Dashboard
     Router.define('/child', () => {
       const u = Auth.currentUser();
       const main = document.getElementById('app-main');
@@ -105,7 +84,6 @@ export const App = {
       DashboardChild.bind(main, { onStartExercises: () => Router.go('/exercises') });
     });
 
-    // Übungsliste
     Router.define('/exercises', () => {
       const u = Auth.currentUser();
       const main = document.getElementById('app-main');
@@ -115,7 +93,6 @@ export const App = {
       ExercisesList.bind(main);
     });
 
-    // Übung spielen
     Router.define('/exercise', ({ query }) => {
       const u = Auth.currentUser();
       const main = document.getElementById('app-main');
@@ -138,15 +115,9 @@ export const App = {
       });
     });
 
-    // Fallback 404
     Router.fallback(() => {
       const main = document.getElementById('app-main');
       main.innerHTML = `<div class="layout-wrapper">${NotFound.render()}</div>`;
     });
   },
 };
-
-/* [D] (Optional) künftige Helper
- * - z. B. zentraler Renderer, der automatisch den Wrapper injiziert,
- *   falls du später weitere Routen hinzufügst.
- */
