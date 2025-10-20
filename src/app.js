@@ -95,6 +95,15 @@ Router.define('/login', () => {
       ExercisesList.bind(main);
     });
 
+Router.define('/stats', () => {
+  const u = Auth.currentUser();
+  const main = document.getElementById('app-main');
+  if (!u || u.role !== 'parent') return Router.go('/login');
+  AppState.user = u;
+  main.innerHTML = `<div class="layout-wrapper">${StatsDetail.render()}</div>`;
+  StatsDetail.bind(main);
+});
+    
     // Übung spielen – mit Belohnungs-Screen (stats + reward)
 Router.define('/exercise', ({ query }) => {
   const u = Auth.currentUser();
