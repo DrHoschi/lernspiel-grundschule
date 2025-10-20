@@ -1,55 +1,49 @@
 /* ============================================================================
  * Datei   : src/ui/StatsDetail.js
- * Version : v0.6.0 (2025-10-20)
- * Zweck   : Eltern-Detailstatistik zum Auswählen (Kind + Übung)
- * Inhalte :
- *   - Verlauf der letzten Runden (Quote % + Ø-Zeit je Aufgabe in ms) als Canvas
- *   - Tabelle: Letzte Runden (Quote, Dauer, Ø, Median)
- *   - Tabelle: Schwierigste Aufgaben (Fehlerrate, Ø-Zeit, Bestzeit)
+ * Version : v0.6.1-sec
+ * Zweck   : Eltern-Detailstatistik mit Sekunden-Anzeige
  * ========================================================================== */
 import { Exercises } from '../data/exercises.js';
 
-function drawChart(canvas, pointsA, pointsB, labels){
+function drawChart(canvas, pointsA, pointsB_ms, labels){
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0,0,W,H);
 
-  // Achsenabstände
   const padL = 36, padR = 12, padT = 12, padB = 24;
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
 
-  // Skalen
-  const maxA = Math.max(100, ...pointsA, 0);
-  const maxB = Math.max(...pointsB, 0);
-  const minB = 0;
+  const x = i => padL + (plotW * (i / Math.max(1, pointsA.length - 1)));
+  const yA = v => padT + (plotH * (1 - (v / 100))); // Quote %
 
-  function x(i){ return padL + (plotW * (i/(Math.max(1, pointsA.length-1)))); }
-  function yA(v){ return padT + (plotH * (1 - (v/Math.max(1,maxA)))); }
-  function yB(v){ return padT + (plotH * (1 - ((v-minB)/Math.max(1,(maxB-minB))))); }
+  // Zeit in Sekunden skalieren
+  const pointsB = pointsB_ms.map(ms => (ms||0)/1000);
+  const maxB = Math.max(2, ...pointsB, 0); // mind. 2s
+  const yB = vSec => padT + (plotH * (1 - (vSec / Math.max(1, maxB))));
 
-  // Gitter
+  // Gitter (Quote)
   ctx.strokeStyle = 'rgba(255,255,255,0.08)';
   ctx.lineWidth = 1;
   [0,25,50,75,100].forEach(p=>{
     const yy = yA(p);
-    ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(W-padR, yy); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.font = '12px system-ui';
+    ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(W - padR, yy); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '12px system-ui';
     ctx.fillText(`${p}%`, 4, yy+4);
   });
 
-  // Linie A (Quote %)
+  // Linie A: Quote
   ctx.strokeStyle = 'rgba(74,163,255,0.9)';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  pointsA.forEach((v,i)=>{ const xx = x(i), yy = yA(v); i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy); });
+  pointsA.forEach((v,i)=>{ const xx=x(i), yy=yA(v); i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy); });
   ctx.stroke();
 
-  // Linie B (Ø-Zeit ms)
+  // Linie B: Ø-Zeit (Sekunden)
   ctx.strokeStyle = 'rgba(62,207,142,0.9)';
   ctx.setLineDash([4,3]); ctx.lineWidth = 2;
   ctx.beginPath();
-  pointsB.forEach((v,i)=>{ const xx = x(i), yy = yB(v); i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy); });
+  pointsB.forEach((vSec,i)=>{ const xx=x(i), yy=yB(vSec); i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy); });
   ctx.stroke();
   ctx.setLineDash([]);
 
@@ -94,7 +88,7 @@ export const StatsDetail = {
           </div>
 
           <div class="panel">
-            <h3>Verlauf (Quote % & Ø-Zeit je Aufgabe)</h3>
+            <h3>Verlauf (Quote % & Ø-Zeit je Aufgabe in s)</h3>
             <canvas id="chart" width="520" height="200" style="width:100%; height:200px;"></canvas>
           </div>
         </div>
@@ -150,19 +144,20 @@ export const StatsDetail = {
     const hist = [...(rec.history||[])].reverse();
     const labels  = hist.map((h,i)=> String(i+1));
     const ratios  = hist.map(h=> h.ratio||0);
-    const avgTimes= hist.map(h=> h.avgMs||0);
-    drawChart(chart, ratios, avgTimes, labels);
+    const avgMs   = hist.map(h=> h.avgMs||0);
+    drawChart(chart, ratios, avgMs, labels);
 
-    // Letzte Runden Tabelle
+    // Letzte Runden Tabelle (Sekunden)
+    const fmtS = ms => ((ms||0)/1000).toFixed(1) + ' s';
     roundsEl.innerHTML = `
       <table style="width:100%; border-collapse:collapse;">
         <thead><tr>
           <th style="text-align:left;">#</th>
           <th style="text-align:left;">Datum</th>
           <th>Quote</th>
-          <th>Dauer</th>
-          <th>Ø-Zeit/Aufg.</th>
-          <th>Median</th>
+          <th>Dauer (s)</th>
+          <th>Ø/Aufg. (s)</th>
+          <th>Median (s)</th>
         </tr></thead>
         <tbody>
           ${ (rec.history||[]).map((h,idx)=>`
@@ -170,19 +165,25 @@ export const StatsDetail = {
               <td>${idx+1}</td>
               <td>${new Date(h.ts).toLocaleString()}</td>
               <td style="text-align:center;">${h.ratio}%</td>
-              <td style="text-align:center;">${h.durationSec||0}s</td>
-              <td style="text-align:center;">${h.avgMs||0}ms</td>
-              <td style="text-align:center;">${h.medianMs||0}ms</td>
+              <td style="text-align:center;">${h.durationSec||0}</td>
+              <td style="text-align:center;">${fmtS(h.avgMs)}</td>
+              <td style="text-align:center;">${fmtS(h.medianMs)}</td>
             </tr>
           `).join('') }
         </tbody>
       </table>
     `;
 
-    // Schwierigste Aufgaben (Top 10)
+    // Schwierigste Aufgaben (Sekunden)
     const probs = Object.entries(rec.problems||{}).map(([key,pr])=>{
       const err = pr.total ? Math.round(100*pr.wrong/pr.total) : 0;
-      return { key, err, total: pr.total, wrong: pr.wrong, avg: pr.avgMs||0, med: pr.medianMs||0, best: pr.bestMs||0 };
+      return {
+        key, err, total: pr.total,
+        avg: ((pr.avgMs||0)/1000),
+        med: ((pr.medianMs||0)/1000),
+        best: ((pr.bestMs||0)/1000),
+        last: ((pr.lastMs||0)/1000)
+      };
     }).sort((a,b)=> b.err - a.err || (b.avg - a.avg)).slice(0,10);
 
     probsEl.innerHTML = probs.length ? `
@@ -191,9 +192,10 @@ export const StatsDetail = {
           <th style="text-align:left;">Aufgabe</th>
           <th>Fehler%</th>
           <th>Vers.</th>
-          <th>Ø ms</th>
-          <th>Median</th>
-          <th>Bestzeit</th>
+          <th>Ø (s)</th>
+          <th>Median (s)</th>
+          <th>Best (s)</th>
+          <th>Letzte (s)</th>
         </tr></thead>
         <tbody>
           ${probs.map(p=>`
@@ -201,9 +203,10 @@ export const StatsDetail = {
               <td>${p.key.replace('x',' × ')}</td>
               <td style="text-align:center;">${p.err}%</td>
               <td style="text-align:center;">${p.total}</td>
-              <td style="text-align:center;">${p.avg}</td>
-              <td style="text-align:center;">${p.med}</td>
-              <td style="text-align:center;">${p.best}</td>
+              <td style="text-align:center;">${p.avg.toFixed(1)}</td>
+              <td style="text-align:center;">${p.med.toFixed(1)}</td>
+              <td style="text-align:center;">${p.best.toFixed(1)}</td>
+              <td style="text-align:center;">${p.last.toFixed(1)}</td>
             </tr>
           `).join('')}
         </tbody>
