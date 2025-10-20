@@ -1,7 +1,7 @@
 /* ============================================================================
- * Datei : src/lib/api.js
- * Version: v0.3.0
- * Zweck  : Dünner Fetch-Client mit Timeout + Fallback-Fehlern.
+ * Datei  : src/lib/api.js
+ * Version: v0.4.0 (2025-10-20)
+ * Zweck  : Dünner Fetch-Client mit Timeout + JSON-Handling.
  * ========================================================================== */
 import { CONFIG } from '../config.js';
 
@@ -36,13 +36,15 @@ async function request(path, { method='GET', body, token } = {}){
 }
 
 export const API = {
-  // POST /attempt  { childName, exerciseId, correct, wrong, durationSec, playedAtISO }
-  async postAttempt(payload, { token } = {}) {
-    return request('/attempt', { method: 'POST', body: payload, token });
+  // Auth (Parent)
+  loginParent({ email, password }) {
+    return request('/auth/login', { method: 'POST', body: { email, password }});
   },
-
-  // GET /stats     -> aggregierte Elternsicht
-  async getStats({ token } = {}) {
-    return request('/stats', { method: 'GET', token });
-  }
+  // Auth (Child via Bild-PIN)
+  loginChild({ parentEmail, childName, pin }) {
+    return request('/auth/child-login', { method: 'POST', body: { parentEmail, childName, pin }});
+  },
+  // Optional
+  getStats({ token } = {}) { return request('/stats', { method: 'GET', token }); },
+  postAttempt(payload, { token } = {}) { return request('/attempt', { method: 'POST', body: payload, token }); }
 };
