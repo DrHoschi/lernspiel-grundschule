@@ -1,9 +1,14 @@
-/* =============================================================
- * ui/ExercisePlay.js — v0.5.0
- * NEU: Reward-Ermittlung nach Finish (Bronze/Silber/Gold + Fortschritt)
- * ============================================================= */
+/* ============================================================================
+ * Datei   : src/ui/ExercisePlay.js
+ * Version : v0.6.0 (2025-10-20)
+ * Zweck   : Einmaleins-Übung mit Zeitmessung pro Item + Rundendauer.
+ * Speichert pro Aufgabe (a×b):
+ *   - correct (true/false)
+ *   - timeMs (Millisekunden für diese Aufgabe)
+ *   - a, b, result
+ * Übergibt an Exercises.saveAttempt(...) die vollständige Itemliste.
+ * ========================================================================== */
 import { Exercises } from '../data/exercises.js';
-import { Utils } from '../lib/utils.js';
 
 export const ExercisePlay = {
   _state: null,
@@ -14,12 +19,15 @@ export const ExercisePlay = {
       return `<section class="panel"><h2>Übung nicht gefunden</h2><p><a href="#/exercises">Zurück</a></p></section>`;
     }
     this._state = {
-      ex, user,
-      total: ex.config.questions, min: ex.config.min, max: ex.config.max,
+      user, ex,
+      total: ex.config.questions,
+      min: ex.config.min, max: ex.config.max,
       asked: 0, correct: 0, wrong: 0,
-      startTs: Date.now(), timeLimit: ex.config.timeLimitSec
+      startTs: Date.now(), timeLimit: ex.config.timeLimitSec,
+      items: [],           // ← sammelt {a,b,result,correct,timeMs}
+      qStartTs: null,      // ← Startzeitpunkt der aktuellen Aufgabe
     };
-    const q = this._nextQuestion();
+    const q = this._nextQuestion(); // setzt auch qStartTs
     return `
       <section class="panel">
         <div class="spread">
@@ -40,6 +48,7 @@ export const ExercisePlay = {
               <button id="btn-submit">Prüfen</button>
               <button id="btn-skip" class="ghost">Überspringen</button>
             </div>
+            <p class="muted" style="color:var(--muted)">Tipp: schnelle Eingabe + Enter</p>
           </div>
 
           <div class="panel">
@@ -53,12 +62,12 @@ export const ExercisePlay = {
   },
 
   bind(rootEl, { onFinish }) {
-    const timeEl = rootEl.querySelector('#time-left');
+    const timeEl   = rootEl.querySelector('#time-left');
     const answerEl = rootEl.querySelector('#answer');
-    const submitBtn = rootEl.querySelector('#btn-submit');
-    const skipBtn = rootEl.querySelector('#btn-skip');
+    const submitBtn= rootEl.querySelector('#btn-submit');
+    const skipBtn  = rootEl.querySelector('#btn-skip');
 
-    // Timer
+    // Timer (Gesamt)
     const tick = () => {
       const gone = Math.floor((Date.now() - this._state.startTs) / 1000);
       const left = Math.max(0, this._state.timeLimit - gone);
@@ -69,64 +78,76 @@ export const ExercisePlay = {
     this._state._timer = requestAnimationFrame(tick);
 
     submitBtn.addEventListener('click', () => {
-      this._check(answerEl.value); answerEl.value=''; answerEl.focus();
+      this._checkAndRecord(answerEl.value);
+      answerEl.value = '';
+      answerEl.focus();
     });
     answerEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter'){ this._check(answerEl.value); answerEl.value=''; }
+      if (e.key === 'Enter') {
+        this._checkAndRecord(answerEl.value);
+        answerEl.value = '';
+      }
     });
-    skipBtn.addEventListener('click', () => this._mark(false));
+    skipBtn.addEventListener('click', () => {
+      this._record(false); // falsche Antwort ohne Eingabe
+    });
 
-    // === Finish: speichern + Reward bestimmen ===
-    const finish = async () => {
+    // Finish: lokal speichern inkl. Zeiten → Reward/Stats kommen von Exercises.saveAttempt
+    const finish = () => {
       if (this._state?._timer) cancelAnimationFrame(this._state._timer);
-      const { user, ex, correct, wrong, startTs } = this._state;
+      const { user, ex, correct, wrong, startTs, items } = this._state;
 
-      // Lokal speichern + Stats bekommen (incl. delta/best/streak/last5Avg)
       const stats = Exercises.saveAttempt({
         userName: user.name || 'Kind',
         exerciseId: ex.id,
         correctCount: correct,
-        wrongCount: wrong
+        wrongCount: wrong,
+        playedAtISO: new Date().toISOString(),
+        durationSec: Math.max(0, Math.round((Date.now() - startTs) / 1000)),
+        items
       });
 
-      // Reward-Regeln:
-      //  - Bronze (>=60), Silber (>=75), Gold (>=90)
-      //  - Extra-Sticker „🚀 Fortschritt“, wenn Delta >= +10
       const tier = stats.ratio >= 90 ? 'gold' : (stats.ratio >= 75 ? 'silver' : (stats.ratio >= 60 ? 'bronze' : 'none'));
       const tierIcon = tier === 'gold' ? '🥇' : tier === 'silver' ? '🥈' : tier === 'bronze' ? '🥉' : '🎯';
       const progressSticker = stats.delta >= 10 ? '🚀 Fortschritt' : '';
       const reward = { tier, tierIcon, progressSticker, ratio: stats.ratio, delta: stats.delta, best: stats.bestRatio, streak: stats.streak, last5Avg: stats.last5Avg };
-
-      // (Optional) Server-Sync bleibt bestehen – ausgelassen hier der Kürze wegen
 
       onFinish && onFinish({ ex, correct, wrong, stats, reward });
     };
     this._finish = finish;
   },
 
-  _nextQuestion(){
+  // --- Helfer -------------------------------------------------------------
+  _nextQuestion() {
     const a = this._rand(this._state.min, this._state.max);
     const b = this._rand(this._state.min, this._state.max);
     this._state.current = { a, b, result: a*b };
+    this._state.qStartTs = Date.now(); // Startzeit für diese Aufgabe
     return this._state.current;
   },
   _rand(min,max){ return Math.floor(Math.random()*(max-min+1))+min; },
 
-  _check(raw){
+  _checkAndRecord(raw){
     const val = Number(raw);
     const ok = Number.isFinite(val) && val === this._state.current.result;
-    this._mark(ok);
+    this._record(ok);
   },
 
-  _mark(ok){
-    const qText = document.getElementById('q-text');
-    const qNum  = document.getElementById('q-num');
-    const sC    = document.getElementById('stat-correct');
-    const sW    = document.getElementById('stat-wrong');
+  _record(ok){
+    const now = Date.now();
+    const timeMs = Math.max(0, now - (this._state.qStartTs || now));
+    const { a, b, result } = this._state.current;
 
+    // Statistik aktualisieren
     this._state.asked += 1;
     if (ok) this._state.correct += 1; else this._state.wrong += 1;
 
+    // Item speichern
+    this._state.items.push({ a, b, result, correct: !!ok, timeMs });
+
+    // UI
+    const sC = document.getElementById('stat-correct');
+    const sW = document.getElementById('stat-wrong');
     if (sC) sC.textContent = String(this._state.correct);
     if (sW) sW.textContent = String(this._state.wrong);
 
@@ -134,6 +155,8 @@ export const ExercisePlay = {
       this._finish && this._finish();
       return;
     }
+    const qText = document.getElementById('q-text');
+    const qNum  = document.getElementById('q-num');
     const q = this._nextQuestion();
     if (qText) qText.textContent = `${q.a} × ${q.b} = ?`;
     if (qNum)  qNum.textContent  = String(this._state.asked + 1);
