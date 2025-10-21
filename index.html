@@ -48,5 +48,20 @@
 
   <!-- (4) JS-Module -->
   <script type="module" src="./src/boot.js"></script>
+  <script>
+  // SW-Registration
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      // Pfad relativ zum Projekt-Root; SW liegt neben index.html
+      navigator.serviceWorker.register('./service-worker.js')
+        .then(reg => {
+          console.log('[PWA] Service Worker registriert:', reg.scope);
+        })
+        .catch(err => {
+          console.warn('[PWA] Service Worker Fehler:', err);
+        });
+    });
+  }
+</script>
 </body>
 </html>
