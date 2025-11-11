@@ -1,8 +1,8 @@
 /* =============================================================
- * ui/ExercisesList.js — v0.3.1 (2025-11-11)
- * - Blaue Operator-Emojis (sichtbar im Dark-Theme)
+ * ui/ExercisesList.js — v0.3.2 (2025-11-11)
+ * - Blaue Operator-Emojis
  * - Zahlenraum-Vorauswahl: 10 / 100 / 1 000 / 1 000 000
- * - FIX: Fallback-Navigation nach Abschluss → #/exercises (statt #/rewards)
+ * - FIX: Nach Abschluss NICHT weg-navigieren, wenn wir gerade im Spiel sind
  * ============================================================= */
 import { Exercises } from '../data/exercises.js';
 
@@ -85,11 +85,14 @@ export const ExercisesList = {
     });
 
     // Fallback-Navigation nach Abschluss:
-    // Wenn dein Router/Play nicht selbst navigiert, geht's sicher zurück zur Übungsübersicht.
+    // Bleib auf dem Ergebnis-Panel, WENN wir gerade im Spiel sind.
     if (!window.__ls_finishNavRegistered) {
       window.__ls_finishNavRegistered = true;
       window.addEventListener('cb:exercise:finished', () => {
-        location.hash = '#/exercises';
+        const h = location.hash || '';
+        const isGameView = h.startsWith('#/exercise') || h.startsWith('#/play');
+        if (isGameView) return;          // Ergebnis/Belohnung sichtbar lassen
+        location.hash = '#/exercises';   // sonst zurück zur Übersicht
       });
     }
   }
