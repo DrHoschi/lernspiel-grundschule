@@ -1,16 +1,12 @@
 /* ============================================================================
  * Datei   : src/ui/ExercisePlay.js
- * Version : v0.9.0 (2025-11-11)
+ * Version : v0.9.1 (2025-11-11)
  * Zweck   : Verallgemeinerter Aufgabenspieler (add/sub/mul/div + gemischt)
  *
- * Neu in v0.9.0
- * - Operator-agnostischer Generator (op oder ops[])
- * - Division ohne Rest: c ÷ a = b (mit c = a*b)
- * - Subtraktion ohne negative Ergebnisse
- * - UI-Text dynamisch je Aufgabe
- * - Robuster Finish-Schutz bleibt erhalten
- *
- * Sticker/Achievements/Goals unverändert weiter nutzbar.
+ * Neu in v0.9.1
+ * - Robust: feuert immer cb:exercise:finished
+ * - Fallback-UI: Ergebnis-Panel + „Weiter“-Buttons, wenn onFinish fehlt
+ * - Kleinere Guards (Mehrfach-Finish verhindern, Controls deaktivieren)
  * ========================================================================== */
 import { Exercises } from '../data/exercises.js';
 import { Storage } from '../lib/storage.js';
@@ -18,7 +14,7 @@ import { Achievements } from '../data/achievements.js';
 import { Goals } from '../data/goals.js';
 const STICKERS_KEY = 'lernspiel.stickers';
 
-/* ---- Sticker-Helfer (unverändert) -------------------------------------- */
+/* ------------------------------ Sticker-Helfer --------------------------- */
 function giveStickers(childName, exerciseId, reward){
   const db = Storage.get(STICKERS_KEY, {});
   if (!db[childName]) db[childName] = [];
@@ -30,50 +26,47 @@ function giveStickers(childName, exerciseId, reward){
     db[childName].push({ ts, exerciseId, tier: 'progress', tierIcon: '🚀', progress: true });
   }
   Storage.set(STICKERS_KEY, db);
+  // Info für evtl. Sticker-Ansicht
+  window.dispatchEvent(new CustomEvent('cb:stickers:updated', { detail:{ childName, exerciseId }}));
 }
 
-/* ---- Operator-Mapping --------------------------------------------------- */
+/* ------------------------------ Operatoren ------------------------------ */
 const OP = {
   add: { sym: '＋', make(min,max){
-      const a = rand(min,max), b = rand(min,max);
+      const a = r(min,max), b = r(min,max);
       return { a, b, op: 'add', opSymbol: '+', text: `${a} + ${b} = ?`, result: a+b, key:`${a}+${b}` };
     }},
   sub: { sym: '−', make(min,max){
-      let a = rand(min,max), b = rand(min,max);
-      if (b>a) [a,b] = [b,a]; // keine negativen Ergebnisse
+      let a = r(min,max), b = r(min,max);
+      if (b>a) [a,b] = [b,a]; // nie negativ
       return { a, b, op: 'sub', opSymbol: '-', text: `${a} - ${b} = ?`, result: a-b, key:`${a}-${b}` };
     }},
   mul: { sym: '×', make(min,max){
-      const a = rand(min,max), b = rand(min,max);
+      const a = r(min,max), b = r(min,max);
       return { a, b, op: 'mul', opSymbol: '×', text: `${a} × ${b} = ?`, result: a*b, key:`${a}×${b}` };
     }},
   div: { sym: '÷', make(min,max){
-      // c ÷ a = b  (mit c = a*b, damit immer ganzzahlig)
-      const a = rand(min,max), b = rand(min,max), c = a*b;
+      // c ÷ a = b (immer ganzzahlig)
+      const a = r(min,max), b = r(min,max), c = a*b;
       return { a:c, b:a, op: 'div', opSymbol: '÷', text: `${c} ÷ ${a} = ?`, result: b, key:`${c}÷${a}` };
     }}
 };
-function rand(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+function r(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
 
 export const ExercisePlay = {
   _state: null,
 
   render({ user, exerciseId }) {
     const ex = Exercises.getById(exerciseId) || Exercises.getById('m-multiplication-2to10');
-
-    // Operatorquelle bestimmen
-    const ops = Array.isArray(ex.config.ops) && ex.config.ops.length
-      ? ex.config.ops
-      : [ex.config.op || 'mul'];
+    const ops = Array.isArray(ex.config.ops) && ex.config.ops.length ? ex.config.ops : [ex.config.op || 'mul'];
 
     this._state = {
-      user, ex,
-      ops,
+      user, ex, ops,
       min: ex.config.min, max: ex.config.max,
       total: ex.config.questions,
       asked: 0, correct: 0, wrong: 0,
       startTs: Date.now(), timeLimit: ex.config.timeLimitSec,
-      items: [],           // {a,b,op,opSymbol,result,correct,timeMs,key}
+      items: [],
       qStartTs: null,
       _timer: null,
       _finished: false
@@ -113,13 +106,19 @@ export const ExercisePlay = {
     `;
   },
 
-  bind(rootEl, { onFinish }) {
+  bind(rootEl, { onFinish } = {}) {
     const timeEl   = rootEl.querySelector('#time-left');
     const answerEl = rootEl.querySelector('#answer');
     const submitBtn= rootEl.querySelector('#btn-submit');
     const skipBtn  = rootEl.querySelector('#btn-skip');
 
-    // Timer (Gesamt)
+    const disableControls = () => {
+      if (answerEl) answerEl.disabled = true;
+      if (submitBtn) submitBtn.disabled = true;
+      if (skipBtn) skipBtn.disabled = true;
+    };
+
+    // Timer
     const tick = () => {
       const left = Math.max(0, this._state.timeLimit - Math.floor((Date.now() - this._state.startTs)/1000));
       if (timeEl) timeEl.textContent = String(left);
@@ -128,77 +127,84 @@ export const ExercisePlay = {
     };
     tick();
 
-    // Eingaben
+    // Interaktionen
     answerEl?.focus();
-    submitBtn.addEventListener('click', () => {
-      this._checkAndRecord(answerEl.value);
-      answerEl.value = '';
-      answerEl.focus();
-    });
-    answerEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        this._checkAndRecord(answerEl.value);
-        answerEl.value = '';
-      }
-    });
-    skipBtn.addEventListener('click', () => {
-      this._record(false); // falsche Antwort ohne Eingabe
-    });
+    submitBtn?.addEventListener('click', () => { this._checkAndRecord(answerEl.value); answerEl.value=''; answerEl.focus(); });
+    answerEl?.addEventListener('keydown', (e) => { if (e.key==='Enter'){ this._checkAndRecord(answerEl.value); answerEl.value=''; }});
+    skipBtn?.addEventListener('click', () => { this._record(false); });
 
-    // === Robustes Finish ===
+    // === Abschluss ===
     const finish = () => {
       if (this._state._finished) return;
       this._state._finished = true;
 
-      if (this._state?._timer) cancelAnimationFrame(this._state._timer);
-
-      // Controls deaktivieren
-      answerEl && (answerEl.disabled = true);
-      submitBtn && (submitBtn.disabled = true);
-      skipBtn && (skipBtn.disabled = true);
+      if (this._state._timer) cancelAnimationFrame(this._state._timer);
+      disableControls();
 
       const { user, ex, correct, wrong, startTs, items } = this._state;
 
       const stats = Exercises.saveAttempt({
-        userName: user.name || 'Kind',
+        userName: user?.name || 'Kind',
         exerciseId: ex.id,
         correctCount: correct,
         wrongCount: wrong,
         playedAtISO: new Date().toISOString(),
-        durationSec: Math.max(0, Math.round((Date.now() - startTs) / 1000)),
+        durationSec: Math.max(0, Math.round((Date.now() - startTs)/1000)),
         items
       });
 
-      // einfache Belohnungslogik wie gehabt
       const reward = Achievements.evaluate(ex.id, stats);
-      giveStickers(user.name || 'Kind', ex.id, reward);
-      Goals.updateProgress(user.name || 'Kind', ex.id, stats);
+      giveStickers(user?.name || 'Kind', ex.id, reward);
+      Goals.updateProgress(user?.name || 'Kind', ex.id, stats);
 
-      onFinish && onFinish({ ex, correct, wrong, stats, reward });
+      // 1) Event für Router/übergeordnete Views
+      const detail = { ex, correct, wrong, stats, reward };
+      window.dispatchEvent(new CustomEvent('cb:exercise:finished', { detail }));
+
+      // 2) Falls der Aufrufer einen Callback liefert → nutzen
+      if (typeof onFinish === 'function') {
+        onFinish(detail);
+        return;
+      }
+
+      // 3) Fallback-UI direkt im Component (kein Router nötig)
+      const area = rootEl.querySelector('#exercise-area');
+      if (area){
+        const ratio = (correct+wrong)>0 ? Math.round(100*correct/(correct+wrong)) : 0;
+        area.innerHTML = `
+          <div class="panel" style="grid-column:1/-1">
+            <h3>Ergebnis</h3>
+            <p><strong>${ex.title}</strong></p>
+            <p>✅ Richtig: <strong>${correct}</strong> &nbsp; · &nbsp; ❌ Falsch: <strong>${wrong}</strong></p>
+            <p>Trefferquote: <strong>${ratio}%</strong> &nbsp; · &nbsp; Beste Quote bisher: <strong>${stats.bestRatio}%</strong></p>
+            <div class="form-actions">
+              <a class="button" href="#/rewards">Zu den Belohnungen</a>
+              <a class="button ghost" href="#/exercises">Zurück zu den Übungen</a>
+            </div>
+            <p class="muted">Tipp: In deiner App kannst du auf <code>cb:exercise:finished</code> hören und eigene Navigation machen.</p>
+          </div>`;
+      }
     };
     this._finish = finish;
   },
 
-  // --- Helfer -------------------------------------------------------------
-  _nextQuestion() {
+  /* ------------------------------ Helfer --------------------------------- */
+  _nextQuestion(){
     const type = this._pickOp();
     const q = OP[type].make(this._state.min, this._state.max);
     this._state.current = q;
     this._state.qStartTs = Date.now();
     return q;
   },
-
   _pickOp(){
     const ops = this._state.ops || ['mul'];
     return ops[Math.floor(Math.random()*ops.length)];
   },
-
   _checkAndRecord(raw){
     const val = Number(raw);
     const ok = Number.isFinite(val) && val === this._state.current.result;
     this._record(ok);
   },
-
   _record(ok){
     if (this._state._finished) return;
 
@@ -206,26 +212,21 @@ export const ExercisePlay = {
     const timeMs = Math.max(0, now - (this._state.qStartTs || now));
     const { a, b, op, opSymbol, result, text, key } = this._state.current;
 
-    // Statistik aktualisieren
     this._state.asked += 1;
     if (ok) this._state.correct += 1; else this._state.wrong += 1;
 
-    // Item speichern
     this._state.items.push({ a, b, op, opSymbol, result, correct: !!ok, timeMs, text, key });
 
-    // UI
     const sC = document.getElementById('stat-correct');
     const sW = document.getElementById('stat-wrong');
     if (sC) sC.textContent = String(this._state.correct);
     if (sW) sW.textContent = String(this._state.wrong);
 
-    // Ende?
     if (this._state.asked >= this._state.total){
       this._finish && this._finish();
       return;
     }
 
-    // Nächste Frage
     const qText = document.getElementById('q-text');
     const qNum  = document.getElementById('q-num');
     const q = this._nextQuestion();
