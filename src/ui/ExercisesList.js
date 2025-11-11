@@ -1,25 +1,21 @@
 /* =============================================================
- * ui/ExercisesList.js — v0.2.0 (2025-11-11)
- * Auswahl + Start echter Übungen.
- *
- * Änderungen ggü. v0.1.1
- * - Titel mit Operator-Emojis (add/sub/mul/div, auch gemischt)
- * - Stabile Badges (Fallbacks für subject/grade)
- * - Einmaliger Global-Listener für cb:exercise:finished → #/rewards
- *   (nur Fallback; falls dein Router selbst navigiert, stört das nicht)
+ * ui/ExercisesList.js — v0.3.0 (2025-11-11)
+ * - Blaue Operator-Emojis
+ * - Zahlenraum-Vorauswahl: 10 / 100 / 1 000 / 1 000 000
+ *   → Start: #/exercise?id=…&range=…
  * ============================================================= */
 import { Exercises } from '../data/exercises.js';
 
 const OP_EMOJI = { add:'➕', sub:'➖', mul:'✖️', div:'➗' };
+const RANGE_PRESETS = [10, 100, 1000, 1000000];
 
-function titleWithEmojis(def){
+function emojiStrip(def){
   const ops = Array.isArray(def.config?.ops) && def.config.ops.length
     ? def.config.ops
     : [def.config?.op || 'mul'];
-  const prefix = [...new Set(ops)].map(o => OP_EMOJI[o] || '').join(' ');
-  return `${prefix ? prefix + ' ' : ''}${def.title}`;
+  const unique = [...new Set(ops)];
+  return unique.map(o => `<span class="op-emoji" title="${o}">${OP_EMOJI[o]||''}</span>`).join(' ');
 }
-
 function badgeText(def){
   const subject = def.subject || 'Mathe';
   const grade   = (def.grade != null && def.grade !== '') ? def.grade : '—';
@@ -27,22 +23,40 @@ function badgeText(def){
 }
 
 export const ExercisesList = {
-  render(user) {
+  render() {
     const list = Exercises.list();
-    const items = list.map(x => `
-      <li class="panel">
+    const items = list.map(x => {
+      const ranges = RANGE_PRESETS.map((val, i) => `
+        <button class="rng${i===0?' is-active':''}" data-val="${val}">
+          ${val.toLocaleString('de-DE')}
+        </button>`).join('');
+      return `
+      <li class="panel ex-item" data-id="${x.id}" data-range="${RANGE_PRESETS[0]}">
         <div class="spread">
           <div>
-            <strong>${titleWithEmojis(x)}</strong>
+            <strong class="ex-title">${emojiStrip(x)} <span>${x.title}</span></strong>
             <div class="badge">${badgeText(x)}</div>
           </div>
-          <div>
-            <button class="btn-start" data-id="${x.id}">Start</button>
+          <div class="ex-actions">
+            <div class="range-select">${ranges}</div>
+            <button class="btn-start">Start</button>
           </div>
         </div>
-      </li>`).join('');
+      </li>`;
+    }).join('');
+
+    const style = `
+      <style>
+        .op-emoji{ font-weight:700; color:#4da3ff; margin-right:.25em }
+        .ex-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end }
+        .range-select{ display:flex; gap:6px; flex-wrap:wrap }
+        .range-select button{ padding:4px 8px; border-radius:8px; border:1px solid var(--border,#2a2f3a); background:transparent; color:inherit; }
+        .range-select button.is-active{ background:#1d3b66; border-color:#2e5ea6; color:#cfe3ff }
+        @media (max-width:480px){ .ex-actions{ flex-direction:column; align-items:stretch } }
+      </style>`;
 
     return `
+      ${style}
       <section class="panel">
         <h2>Übungen</h2>
         <ul style="list-style:none;padding:0;margin:0;display:grid;gap:12px;">
@@ -52,23 +66,28 @@ export const ExercisesList = {
   },
 
   bind(rootEl) {
-    // Start-Buttons: Route bleibt wie in deinem Original (#/exercise?id=…)
-    rootEl.querySelectorAll('.btn-start').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.getAttribute('data-id');
-        window.location.hash = `#/exercise?id=${encodeURIComponent(id)}`;
+    // Rangewahl pro Eintrag
+    rootEl.querySelectorAll('.ex-item').forEach(li => {
+      li.querySelector('.range-select')?.addEventListener('click', (ev) => {
+        const b = ev.target.closest('button[data-val]');
+        if (!b) return;
+        li.setAttribute('data-range', b.getAttribute('data-val'));
+        li.querySelectorAll('.range-select button').forEach(x => x.classList.remove('is-active'));
+        b.classList.add('is-active');
+      });
+
+      // Start → #/exercise?id=...&range=...
+      li.querySelector('.btn-start')?.addEventListener('click', () => {
+        const id = li.getAttribute('data-id');
+        const r  = li.getAttribute('data-range') || '10';
+        window.location.hash = `#/exercise?id=${encodeURIComponent(id)}&range=${encodeURIComponent(r)}`;
       });
     });
 
-    // Einmaliger Fallback für das Abschluss-Event (Navigation zu Rewards),
-    // falls dein Router/Play-Screen nicht selbst navigiert:
+    // Fallback-Navigation nach Abschluss (falls Play/Router nichts tut)
     if (!window.__ls_finishNavRegistered) {
       window.__ls_finishNavRegistered = true;
-      window.addEventListener('cb:exercise:finished', () => {
-        // Nur navigieren, wenn wir gerade NICHT schon auf einer gültigen Route mit Inhalt sind.
-        // (Einfache, sichere Variante: immer zur Rewards-Seite springen.)
-        location.hash = '#/rewards';
-      });
+      window.addEventListener('cb:exercise:finished', () => { location.hash = '#/rewards'; });
     }
   }
 };
