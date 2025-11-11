@@ -1,8 +1,8 @@
 /* =============================================================
- * ui/ExercisesList.js — v0.3.0 (2025-11-11)
- * - Blaue Operator-Emojis
+ * ui/ExercisesList.js — v0.3.1 (2025-11-11)
+ * - Blaue Operator-Emojis (sichtbar im Dark-Theme)
  * - Zahlenraum-Vorauswahl: 10 / 100 / 1 000 / 1 000 000
- *   → Start: #/exercise?id=…&range=…
+ * - FIX: Fallback-Navigation nach Abschluss → #/exercises (statt #/rewards)
  * ============================================================= */
 import { Exercises } from '../data/exercises.js';
 
@@ -66,7 +66,7 @@ export const ExercisesList = {
   },
 
   bind(rootEl) {
-    // Rangewahl pro Eintrag
+    // Zahlenraum je Eintrag wählen
     rootEl.querySelectorAll('.ex-item').forEach(li => {
       li.querySelector('.range-select')?.addEventListener('click', (ev) => {
         const b = ev.target.closest('button[data-val]');
@@ -84,10 +84,13 @@ export const ExercisesList = {
       });
     });
 
-    // Fallback-Navigation nach Abschluss (falls Play/Router nichts tut)
+    // Fallback-Navigation nach Abschluss:
+    // Wenn dein Router/Play nicht selbst navigiert, geht's sicher zurück zur Übungsübersicht.
     if (!window.__ls_finishNavRegistered) {
       window.__ls_finishNavRegistered = true;
-      window.addEventListener('cb:exercise:finished', () => { location.hash = '#/rewards'; });
+      window.addEventListener('cb:exercise:finished', () => {
+        location.hash = '#/exercises';
+      });
     }
   }
 };
