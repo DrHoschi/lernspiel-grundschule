@@ -1,23 +1,22 @@
 /* ============================================================================
  * Datei   : src/ui/ExercisePlay.js
- * Version : v0.8.2 (2025-11-11)
- * Zweck   : Aufgaben-Spieler für add/sub/mul/div + gemischt
- * Neu     : liest &range=… aus der Hash-URL und überschreibt max
+ * Version : v0.8.3 (2025-11-11)
+ * Zweck   : Aufgaben-Spieler (add/sub/mul/div + gemischt) mit robustem Reward
+ * Änderungen:
+ * - Reward-Pipeline robust:
+ *     • nutzt Achievements.evaluate(exId, stats) wenn vorhanden,
+ *     • sonst Achievements.onRound(child, reward, exId),
+ *     • sonst lokale Tier-Berechnung.
+ * - Events: cb:stickers:updated + cb:rewards:earned
+ * - Fallback-UI zeigt Medaille/Icon deutlich an.
+ * - Liest weiterhin &range=… aus der Hash-URL und überschreibt max.
  * ========================================================================== */
 import { Exercises } from '../data/exercises.js';
 import { Storage } from '../lib/storage.js';
 import { Achievements } from '../data/achievements.js';
 import { Goals } from '../data/goals.js';
-const STICKERS_KEY = 'lernspiel.stickers';
 
-function giveStickers(childName, exerciseId, reward){
-  const db = Storage.get(STICKERS_KEY, {});
-  if (!db[childName]) db[childName] = [];
-  const ts = new Date().toISOString();
-  if (reward.tier !== 'none'){ db[childName].push({ ts, exerciseId, tier: reward.tier, tierIcon: reward.tierIcon, progress: false }); }
-  if (reward.progressSticker){ db[childName].push({ ts, exerciseId, tier: 'progress', tierIcon: '🚀', progress: true }); }
-  Storage.set(STICKERS_KEY, db);
-}
+const STICKERS_KEY = 'lernspiel.stickers';
 
 /* ----------------------------- Operatoren -------------------------------- */
 const OP = {
@@ -28,11 +27,27 @@ const OP = {
 };
 function r(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
 
-/* ---- Hash-Query lesen: #/exercise?id=...&range=1000 --------------------- */
+/* ------------------------------- Utils ----------------------------------- */
 function readHashQuery(){
   const raw = (location.hash.split('?')[1] || '').split('&').filter(Boolean);
   const q = {}; raw.forEach(p => { const [k,v] = p.split('='); if (k) q[decodeURIComponent(k)] = decodeURIComponent(v||''); });
   return q;
+}
+function computeTier(stats){
+  const t = stats?.ratio ?? 0;
+  const tier = t>=90?'gold':(t>=75?'silver':(t>=60?'bronze':'none'));
+  const tierIcon = tier==='gold'?'🥇':tier==='silver'?'🥈':tier==='bronze'?'🥉':'🎯';
+  const progressSticker = (stats?.delta ?? 0) >= 10 ? '🚀 Fortschritt' : '';
+  return { tier, tierIcon, progressSticker, ratio: t, delta: stats?.delta||0, best: stats?.bestRatio||0, streak: stats?.streak||0, last5Avg: stats?.last5Avg||0 };
+}
+function giveStickers(childName, exerciseId, reward){
+  const db = Storage.get(STICKERS_KEY, {});
+  if (!db[childName]) db[childName] = [];
+  db[childName].push({ ts: new Date().toISOString(), exerciseId, tier: reward.tier, tierIcon: reward.tierIcon, progress: !!reward.progressSticker });
+  Storage.set(STICKERS_KEY, db);
+  // Events für eventgetriebene UIs
+  window.dispatchEvent(new CustomEvent('cb:stickers:updated', { detail:{ childName, exerciseId, reward }}));
+  window.dispatchEvent(new CustomEvent('cb:rewards:earned',  { detail:{ childName, exerciseId, reward }}));
 }
 
 export const ExercisePlay = {
@@ -44,7 +59,7 @@ export const ExercisePlay = {
 
     const ops = Array.isArray(ex.config.ops) && ex.config.ops.length ? ex.config.ops : [ex.config.op || 'mul'];
 
-    // Range aus Hash übernehmen (nur max überschreiben; min bleibt Definition)
+    // Zahlenraum aus Hash (&range=…) übernehmen (nur max überschreiben)
     const q = readHashQuery();
     const forcedMax = Number(q.range);
     const min = ex.config.min;
@@ -119,6 +134,7 @@ export const ExercisePlay = {
       disableControls();
 
       const { user, ex, correct, wrong, startTs, items } = this._state;
+
       const stats = Exercises.saveAttempt({
         userName: user?.name || 'Kind',
         exerciseId: ex.id,
@@ -129,25 +145,40 @@ export const ExercisePlay = {
         items
       });
 
-      const tier = stats.ratio>=90?'gold':(stats.ratio>=75?'silver':(stats.ratio>=60?'bronze':'none'));
-      const tierIcon = tier==='gold'?'🥇':tier==='silver'?'🥈':tier==='bronze'?'🥉':'🎯';
-      const reward = { tier, tierIcon, progressSticker: (stats.delta>=10?'🚀 Fortschritt':''), ratio:stats.ratio, delta:stats.delta, best:stats.bestRatio, streak:stats.streak, last5Avg:stats.last5Avg };
+      // === Reward ermitteln (robust für beide API-Varianten) ===============
+      let reward = null;
 
+      // 1) Alte API: Achievements.evaluate(exId, stats) → reward
+      if (Achievements && typeof Achievements.evaluate === 'function') {
+        try { reward = Achievements.evaluate(ex.id, stats) || null; } catch(e){ /* ignore */ }
+      }
+
+      // 2) Falls nix geliefert: lokale Tier-Berechnung
+      if (!reward) reward = computeTier(stats);
+
+      // 3) Neue API: Achievements.onRound(child, reward, exId) – optional
+      try { Achievements?.onRound?.(user?.name || 'Kind', reward, ex.id); } catch(e){ /* ignore */ }
+
+      // 4) Goals (optional, kompatibel)
+      try { Goals?.onRound?.(user?.name || 'Kind', correct); } catch(e){ /* ignore */ }
+
+      // 5) Sticker persistieren + Events feuern
       giveStickers(user?.name || 'Kind', ex.id, reward);
-      Achievements.onRound?.(user?.name || 'Kind', reward, ex.id);
-      Goals.onRound?.(user?.name || 'Kind', correct);
 
       const detail = { ex, correct, wrong, stats, reward };
       window.dispatchEvent(new CustomEvent('cb:exercise:finished', { detail }));
 
+      // Eigener Callback der App?
       if (typeof onFinish === 'function'){ onFinish(detail); return; }
 
+      // Fallback-UI mit Medaille
       const area = rootEl.querySelector('#exercise-area');
       if (area){
         const ratio = (correct+wrong)>0 ? Math.round(100*correct/(correct+wrong)) : 0;
         area.innerHTML = `
           <div class="panel" style="grid-column:1/-1">
             <h3>Ergebnis</h3>
+            <p style="font-size:22px;margin:.25em 0;">${reward.tierIcon || '🎯'} <strong>${reward.tier?.toUpperCase?.() || 'ERGEBNIS'}</strong></p>
             <p><strong>${ex.title}</strong></p>
             <p>✅ Richtig: <strong>${correct}</strong> · ❌ Falsch: <strong>${wrong}</strong></p>
             <p>Trefferquote: <strong>${ratio}%</strong> · Bester Wert: <strong>${stats.bestRatio}%</strong></p>
@@ -155,13 +186,14 @@ export const ExercisePlay = {
               <a class="button" href="#/exercises">Weitere Übungen</a>
               <a class="button ghost" href="#/rewards">Belohnungen</a>
             </div>
-            <p class="muted">Hinweis: Deine App kann auf <code>cb:exercise:finished</code> hören und selbst navigieren.</p>
+            <p class="muted">Tipp: Deine Rewards-Ansicht kann auf <code>cb:rewards:earned</code> reagieren.</p>
           </div>`;
       }
     };
     this._finish = finish;
   },
 
+  // ------------------------------- Helfer ---------------------------------
   _nextQuestion(){ const type=this._pickOp(); const q=OP[type].make(this._state.min,this._state.max); this._state.current=q; this._state.qStartTs=Date.now(); return q; },
   _pickOp(){ const ops=this._state.ops || ['mul']; return ops[Math.floor(Math.random()*ops.length)]; },
   _checkAndRecord(raw){ const val=Number(raw); const ok=Number.isFinite(val)&&val===this._state.current.result; this._record(ok); },
