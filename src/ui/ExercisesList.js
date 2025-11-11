@@ -1,40 +1,38 @@
-/* ============================================================================
- * Datei   : src/ui/ExercisesList.js
- * Version : v0.6.0 (2025-11-11)
- * Zweck   : Übersicht aller Übungen (mit Badges + Titel-Emojis)
- * ========================================================================== */
+/* =============================================================
+ * ui/ExercisesList.js — v0.1.1
+ * Auswahl + Start echter Übungen.
+ * ============================================================= */
 import { Exercises } from '../data/exercises.js';
 
-const OP_EMOJI = { add:'➕', sub:'➖', mul:'✖️', div:'➗' };
-
-function titleWithEmoji(def){
-  const ops = Array.isArray(def.config.ops) && def.config.ops.length
-    ? def.config.ops
-    : [def.config.op || 'mul'];
-  const set = [...new Set(ops)];
-  const prefix = set.map(o => OP_EMOJI[o] || '').join(' ');
-  return `${prefix ? prefix+' ' : ''}${def.title}`;
-}
-
 export const ExercisesList = {
-  render(){
-    const items = Exercises.list();
+  render(user) {
+    const list = Exercises.list();
+    const items = list.map(x => `
+      <li class="panel">
+        <div class="spread">
+          <div>
+            <strong>${x.title}</strong>
+            <div class="badge">${x.subject} · Klasse ${x.grade}</div>
+          </div>
+          <div>
+            <button class="btn-start" data-id="${x.id}">Start</button>
+          </div>
+        </div>
+      </li>`).join('');
     return `
       <section class="panel">
         <h2>Übungen</h2>
-        ${items.map(def => `
-          <div class="panel" style="margin-bottom:12px;">
-            <div class="spread">
-              <h3>${titleWithEmoji(def)}</h3>
-              <span class="badge">${def.subject || 'Mathe'} · Klasse ${def.grade || '—'}</span>
-            </div>
-            <div class="form-actions">
-              <a class="button" href="#/play/${def.id}">Start</a>
-            </div>
-          </div>
-        `).join('')}
-      </section>
-    `;
+        <ul style="list-style:none;padding:0;margin:0;display:grid;gap:12px;">
+          ${items}
+        </ul>
+      </section>`;
   },
-  bind(){ /* keine Logik nötig */ }
+  bind(rootEl) {
+    rootEl.querySelectorAll('.btn-start').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        window.location.hash = `#/exercise?id=${encodeURIComponent(id)}`;
+      });
+    });
+  }
 };
