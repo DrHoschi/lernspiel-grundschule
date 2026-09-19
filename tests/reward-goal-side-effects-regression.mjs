@@ -1,0 +1,9 @@
+const store=new Map();globalThis.localStorage={getItem:k=>store.has(k)?store.get(k):null,setItem:(k,v)=>store.set(k,String(v)),removeItem:k=>store.delete(k),clear:()=>store.clear()};globalThis.location={hash:'#/exercise?id=m-addition-2to10'};
+globalThis.CustomEvent=class{constructor(type,init={}){this.type=type;this.detail=init.detail}};const events=[];globalThis.window={dispatchEvent:e=>(events.push(e),true)};globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=()=>{};globalThis.document={getElementById(){return null}};
+const fake=()=>({disabled:false,value:'',textContent:'',addEventListener(){},focus(){}});const a=fake(),s=fake(),k=fake(),t=fake();const root={querySelector:q=>q==='#time-left'?t:q==='#answer'?a:q==='#btn-submit'?s:q==='#btn-skip'?k:q==='#exercise-area'?{innerHTML:''}:null};
+const {ExercisePlay}=await import('../src/ui/ExercisePlay.js');function assert(c,m){if(!c)throw new Error(m)}
+ExercisePlay.render({user:{name:'AUD-03D Kind'},exerciseId:'m-addition-2to10'});let cb=0,d;ExercisePlay.bind(root,{onFinish:x=>{cb++;d=x}});
+for(let i=0;i<10;i++){const q=ExercisePlay._state.current;ExercisePlay._checkAndRecord(String(q.result))}
+assert(cb===1&&d.reward.tier==='gold','reward');assert((JSON.parse(localStorage.getItem('lernspiel.stickers'))['AUD-03D Kind']||[]).length===1,'sticker once');
+assert(JSON.parse(localStorage.getItem('lernspiel.achievements'))['AUD-03D Kind'].counts.gold===1,'achievement once');const goal=Object.values(JSON.parse(localStorage.getItem('lernspiel.goals'))['AUD-03D Kind'])[0];assert(goal.rounds===1&&goal.correct===10,'goal once');
+ExercisePlay._finish();ExercisePlay._record(true);assert(cb===1&&events.filter(e=>e.type==='cb:exercise:finished').length===1,'duplicate side effect');console.log('AUD-03D PASS');
