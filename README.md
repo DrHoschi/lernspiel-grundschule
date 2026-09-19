@@ -1,51 +1,7 @@
-# Lernspiel Grundschule — Start-Setup (v0.1.0)
+# Lernspiel Grundschule — Start-Setup (0.1.0-pre)
 
-Dieses Repository enthält ein minimales Start-Setup für das Lernspiel (Klasse 1–4) inklusive:
-- `index.html` (Einstiegsseite, einfache Router-Logik)
-- `src/` JavaScript-Module (strukturierter Aufbau, ausführliche Kommentare)
-- `assets/` Platzhalterordner für Bilder/Audio
-- `docs/` mit Lastenheft (bitte Datei ablegen)
-- `tests/` Basis für Unit-Tests
+PRE-MVP baseline for the Grundschule learning game. Product version authority: **0.1.0-pre**.
 
-## Quickstart
+Run with a local HTTP server, e.g. `python3 -m http.server 8080`.
 
-1. Starte eine lokale Server-Instanz (z. B. via VS Code „Live Server“ oder Python):
-   ```bash
-   # Variante A (Python 3)
-   python3 -m http.server 8080
-   # Variante B (Node)
-   npx http-server -p 8080
-   ```
-2. Öffne: http://localhost:8080
-
-## Struktur
-
-```
-.
-├── index.html
-├── src/
-│   ├── boot.js
-│   ├── app.js
-│   ├── router.js
-│   ├── styles.css
-│   ├── lib/
-│   │   ├── storage.js
-│   │   └── utils.js
-│   ├── auth/
-│   │   └── auth.js
-│   └── ui/
-│       ├── Navbar.js
-│       ├── LoginForm.js
-│       ├── DashboardParent.js
-│       ├── DashboardChild.js
-│       ├── ExercisesList.js
-│       └── NotFound.js
-├── assets/
-├── docs/
-└── tests/
-```
-
-## Hinweise
-- Es gibt **keinen Backend-Zwang**. Authentifizierung ist vorerst **Mock/Client-seitig** (LocalStorage) und kann später durch echtes Backend ersetzt werden.
-- Router ist Hash-basiert (`#/pfad`). Seiten: `/`, `/login`, `/parent`, `/child`, `/exercises`.
-- UI ist minimal gehalten und bewusst ungestylt (nur `styles.css` als Basis).
+The app is a hash-routed modular JavaScript PWA. Current repository authority and audit history are documented under `docs/`. Authentication remains a PRE-MVP/development implementation; AUD-04A introduces explicit Parent/Child identity and ownership boundaries without selecting a production backend technology.
