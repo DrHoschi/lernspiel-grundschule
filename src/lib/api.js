@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei  : src/lib/api.js
- * Version: v0.4.0 (2025-10-20)
- * Zweck  : Dünner Fetch-Client mit Timeout + JSON-Handling.
+ * Version: v0.5.0-aud04a-i1 (2026-09-13)
+ * Zweck  : Dünner Fetch-Client + Identity/Ownership Authority Transport.
  * ========================================================================== */
 import { CONFIG } from '../config.js';
 
@@ -20,11 +20,9 @@ async function request(path, { method='GET', body, token } = {}){
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await withTimeout(fetch(`${CONFIG.API_BASE}${path}`, {
-    method,
-    headers,
+    method, headers,
     body: body ? (body instanceof FormData ? body : JSON.stringify(body)) : undefined,
-    credentials: 'omit',
-    cache: 'no-store'
+    credentials: 'omit', cache: 'no-store'
   }), CONFIG.API_TIMEOUT_MS);
 
   if (!res.ok) {
@@ -36,15 +34,22 @@ async function request(path, { method='GET', body, token } = {}){
 }
 
 export const API = {
-  // Auth (Parent)
   loginParent({ email, password }) {
-    return request('/auth/login', { method: 'POST', body: { email, password }});
+    return request('/auth/login', { method:'POST', body:{ email, password } });
   },
-  // Auth (Child via Bild-PIN)
-  loginChild({ parentEmail, childName, pin }) {
-    return request('/auth/child-login', { method: 'POST', body: { parentEmail, childName, pin }});
+  loginChild({ parentId, childId, pin }) {
+    return request('/auth/child-login', { method:'POST', body:{ parentId, childId, pin } });
   },
-  // Optional
-  getStats({ token } = {}) { return request('/stats', { method: 'GET', token }); },
-  postAttempt(payload, { token } = {}) { return request('/attempt', { method: 'POST', body: payload, token }); }
+  listChildren({ token } = {}) { return request('/children', { method:'GET', token }); },
+  createChild({ displayName, pin }, { token } = {}) {
+    return request('/children', { method:'POST', body:{ displayName, pin }, token });
+  },
+  updateChild(childId, payload, { token } = {}) {
+    return request(`/children/${encodeURIComponent(childId)}`, { method:'PATCH', body:payload, token });
+  },
+  deleteChild(childId, { token } = {}) {
+    return request(`/children/${encodeURIComponent(childId)}`, { method:'DELETE', token });
+  },
+  getStats({ token } = {}) { return request('/stats', { method:'GET', token }); },
+  postAttempt(payload, { token } = {}) { return request('/attempt', { method:'POST', body:payload, token }); }
 };
