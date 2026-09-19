@@ -1,0 +1,10 @@
+globalThis.location={hash:'#/exercise'};globalThis.localStorage={getItem(){return null},setItem(){},removeItem(){},clear(){}};
+const {ExercisePlay}=await import('../src/ui/ExercisePlay.js');const {Exercises}=await import('../src/data/exercises.js');
+function assert(c,m){if(!c)throw new Error(m)} const op=s=>s==='+'?'add':s==='-'?'sub':s==='×'?'mul':s==='÷'?'div':null;
+for(const ex of Exercises.list()){ExercisePlay.render({user:{name:'AUD-03A'},exerciseId:ex.id});const seen=new Set();
+ for(let i=0;i<5000;i++){const q=ExercisePlay._nextQuestion(),o=op(q.opSymbol);seen.add(o);assert((ex.config.ops||[ex.config.op]).includes(o),ex.id+' op');
+  if(o==='add')assert(q.result===q.a+q.b,ex.id+' add');if(o==='sub')assert(q.a>=q.b&&q.result===q.a-q.b,ex.id+' sub');
+  if(o==='mul')assert(q.result===q.a*q.b,ex.id+' mul');if(o==='div')assert(q.b!==0&&q.a%q.b===0&&q.result===q.a/q.b,ex.id+' div');
+  const old=ExercisePlay._record;let observed=null;ExercisePlay._record=x=>observed=x;ExercisePlay._state.current=q;ExercisePlay._checkAndRecord(String(q.result));assert(observed===true,'correct rejected');observed=null;ExercisePlay._checkAndRecord(String(q.result+1));assert(observed===false,'wrong accepted');ExercisePlay._record=old;
+ } for(const x of ex.config.ops||[ex.config.op])assert(seen.has(x),ex.id+' missing '+x);
+} console.log('AUD-03A PASS');
